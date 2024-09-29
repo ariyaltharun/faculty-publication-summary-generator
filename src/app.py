@@ -15,22 +15,26 @@ from dotenv import load_dotenv
 class App:
     def __init__(self) -> None:
         self.parser = InputParser()
-        self.llm = LLM("llama3-8b-8192", os.getenv("GROQ_API_KEY"))
+        self.llm = LLM(
+            model_name="llama3-8b-8192", 
+            api_key=os.getenv("GROQ_API_KEY"),
+            sys_prompt=utils.llm_sys_prompt
+        )
         self.tools = SearchAPIs.getTools()
         
     def run(self):
         # Streamlit interface
         st.title("Publication Summary Generator for Faculty Members")
-
-        # # 1. Upload file
-        excel_file = st.file_uploader(
+        # 1. Upload file
+        file = st.file_uploader(
             label="Please upload excel file",
             type="xlsx"
         )
-        if excel_file is not None:
-            data = self.parser(excel_file)
-            st.write(data)
+        if file is not None:
+            self.processData(file=file)
 
+    def processData(self, file):
+        data = self.parser(file)
         # # 2. Parse the uploaded file
         # author_details = []
         # for row in data:
@@ -45,44 +49,42 @@ class App:
         # 3a. Search the data
         with st.spinner("Processing"):
             searchData = self.searchPubs([["Meera Devi", "@msrit.edu"], ["Sowmya B J", "@msrit.edu"]])
+        searchData.pub_year.dt.strftime("%Y")
         print("Done!!!!")
-        # 3b. generate summary in form of words
-        st.write("Faculty data")
-        summary_data = self.generateSummary(searchData)
+        # # 3b. generate summary in form of words
+        # st.write("Faculty data")
+        summary_data: str = self.generateSummary(searchData)
 
-        # print(searchData)
-        # print(searchData.to_string())
-        # # 4. Now display the data
+        # 4. Now display the data
+        st.write("Publications in tabular format")
         st.write(searchData)
 
         # 5. Give an option to download the data in desired format
-        self.download_excel_file(searchData)
-        self.download_doc_file(summary_data)
-        # st.download_button(
-        #     label="Download Excel file",
-        #     data=searchData.to_string(),
-        #     file_name="your_gf.xlsx"
-        # )
-        # st.download_button(
-        #     label="Download Summary in Doc fmt",
-        #     data=summary_data,
-        #     file_name="summary_data.doc"
-        # )
-        pass
+        st.write("Summary of publications")
+        st.markdown(summary_data)
 
+        self.downloadData(searchData, summary_data)
+
+    def customDataDisplay(
+            self, 
+            df: utils.pd.DataFrame,
+            start_year: int,
+            end_year: int 
+        ) -> utils.pd.DataFrame:
+        customized_data = df[start_year <= df["pub_year"] <= end_year]
+        return customized_data
+    
     @st.fragment
-    def download_excel_file(self, data):
-        st.download_button(
-            label="Download Excel file",
-            data=data.to_string(),
+    def downloadData(self, searchData, summary_data):
+        _, col1, col2 = st.columns(spec=[0.6, 0.2, 0.2])
+        col1.download_button(
+            label=f"📥 Excel file",
+            data=searchData.to_string(),
             file_name="your_gf.xlsx"
         )
-
-    @st.fragment
-    def download_doc_file(self, data):
-        st.download_button(
-            label="Download Doc file",
-            data=data,
+        col2.download_button(
+            label="📥 Docx file",
+            data=summary_data,
             file_name="summary.doc"
         )
     
@@ -97,7 +99,6 @@ class App:
         for author, email_domain in authors:
             # Search in googlescholar
             pubs = googleScholar(author_name=author, uuid=email_domain)
-            # pprint(pubs[:3])
             for pub in pubs[:3]:
                 df["author_name"].append(author)
                 df["paper_title"].append(pub.get("title", None))

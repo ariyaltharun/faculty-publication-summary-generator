@@ -3,26 +3,19 @@ from dotenv import load_dotenv
 import os
 
 
-class LLM:
-    def __init__(self, model_name, api_key) -> None:
+class LLM: 
+    def __init__(
+        self, 
+        model_name: str, 
+        api_key: str, 
+        sys_prompt: str="You are a helpful assistance"
+    ) -> None:
         self.client = Groq(
             api_key=api_key
         )
         self.model_name = model_name
-        self.sys_prompt = """
-            You are a helpful summary generator. I will provide data in a pandas dataframe format, and your task is to generate a concise summary for each author using their attributes. The summary format should be as follows:
-            ```
-            <author-name>
-            Expertise: <author-expertise>
-            Interests: <author-interest>
+        self.sys_prompt = sys_prompt
 
-            Author publications:
-            <author-paper-title>
-            <a-short-summary-of-the-paper-by-considering-the-attributes-provided>
-            ```
-            Please use clear and informative language when summarizing each paper, ensuring that the summary highlights key aspects based on the author's expertise and interests.
-        """
-    
     def __call__(self, user_prompt: str) -> str:
         chat_completion = self.client.chat.completions.create(
             messages=[
