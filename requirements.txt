@@ -1,0 +1,7 @@
+bibtexparser
+pandas
+requests
+scholarly
+openpyxl
+groq
+python-dotenv
