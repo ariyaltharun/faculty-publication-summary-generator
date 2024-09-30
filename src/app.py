@@ -4,10 +4,11 @@ from pprint import pprint
 import os
 
 import streamlit as st
+import pandas as pd
 from utils import InputParser
 import utils
 from llm import LLM
-from googleScholar import googleScholar
+from googleScholar import GoogleScholar
 from acedemicsDBs import SearchAPIs
 from dotenv import load_dotenv
 
@@ -30,44 +31,53 @@ class App:
             label="Please upload excel file",
             type="xlsx"
         )
+        # Filter by year, if not you r dead
+        year_range = st.slider(
+            label="Select the year range to get papers between these year", 
+            min_value=1999,
+            max_value=2025,
+            value=(2021, 2023),
+            step=1
+        )
+        st.markdown("---")
+        self.start_year = year_range[0]
+        self.end_year = year_range[1]
+        # Process data
         if file is not None:
             self.processData(file=file)
 
     def processData(self, file):
+        # 2. Parse the uploaded file
         data = self.parser(file)
-        # # 2. Parse the uploaded file
-        # author_details = []
-        # for row in data:
-        #     author_details.append(
-        #         (row['name'], row['org'])
-        #     )
-        
+                
         # 3. Process the data
         # for tool in self.tools:
         #     tool(1)
         # for now use googleScholar
         # 3a. Search the data
-        with st.spinner("Processing"):
-            searchData = self.searchPubs([["Meera Devi", "@msrit.edu"], ["Sowmya B J", "@msrit.edu"]])
-        searchData.pub_year.dt.strftime("%Y")
+
+        # for author, org_domain in data.values:
+        with st.spinner(f"Fetching publications"):    
+            scholar_details = self.scholarDetails(scholars=data.values)
         print("Done!!!!")
-        # # 3b. generate summary in form of words
-        # st.write("Faculty data")
-        summary_data: str = self.generateSummary(searchData)
 
-        # 4. Now display the data
+        # 3b. Now display the data
         st.write("Publications in tabular format")
-        st.write(searchData)
+        st.write(scholar_details)
 
+        # 4. generate summary in form of words
+        # st.write("Faculty data")
+        summary_data: str = self.generateSummary(scholar_details)
+        
         # 5. Give an option to download the data in desired format
         st.write("Summary of publications")
         st.markdown(summary_data)
 
-        self.downloadData(searchData, summary_data)
+        self.downloadData(scholar_details, summary_data)
 
     def customDataDisplay(
             self, 
-            df: utils.pd.DataFrame,
+            df: pd.DataFrame,
             start_year: int,
             end_year: int 
         ) -> utils.pd.DataFrame:
@@ -93,25 +103,25 @@ class App:
         # call llm and generate summary for each author
         summy_data = self.llm(data)
         return summy_data
-
-    def searchPubs(self, authors: List[Tuple[str, str]]):
-        df = defaultdict(list)
-        for author, email_domain in authors:
-            # Search in googlescholar
-            pubs = googleScholar(author_name=author, uuid=email_domain)
-            for pub in pubs[:3]:
-                df["author_name"].append(author)
-                df["paper_title"].append(pub.get("title", None))
-                df["abstract"].append(pub.get("abstract", None))
-                df["authors"].append(pub.get("author", None))
-                df["pub_year"].append(pub.get("pub_year", None))
-                df["Journal"].append(pub.get("journal", None))
-        # pprint(df)
-        return utils.pd.DataFrame(df)
+    
+    def scholarDetails(self, scholars: List[List]):
+        google_scholar = GoogleScholar()
+        scholar_data = list()
+        for scholar, org_domain in scholars:
+            data = google_scholar(
+                scholar_name=scholar, 
+                org_domain=org_domain, 
+                start_year=self.start_year, 
+                end_year=self.end_year
+            )
+            scholar_data.append(
+                pd.DataFrame(data)
+            )
+        return pd.concat(scholar_data, ignore_index=True)
 
 
 if __name__ == "__main__":
     load_dotenv()
     app = App()
-    app.tools.append(googleScholar)
     app.run()
+
